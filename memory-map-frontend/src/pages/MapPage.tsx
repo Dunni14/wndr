@@ -1,8 +1,14 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import MapContainer from "../components/Map/MapContainer";
 import MemoryForm from "../components/Memory/MemoryForm";
+import MemoryGallery from "../components/Memory/MemoryGallery";
+import MemoryEditForm from "../components/Memory/MemoryEditForm";
+import { getUserMemories, createMemory, updateMemory, deleteMemory } from "../services/api";
 
 interface Memory {
+  id?: string;
   lat: number;
   lng: number;
   imageUrl?: string;
@@ -12,30 +18,163 @@ interface Memory {
 }
 
 const MapPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { logout, token } = useAuth()!;
   const [pending, setPending] = useState<{ lat: number; lng: number } | null>(null);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [memoryNavIndex, setMemoryNavIndex] = useState<number>(0);
+  const [showGallery, setShowGallery] = useState(false);
+  const [galleryMemories, setGalleryMemories] = useState<Memory[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editingMemory, setEditingMemory] = useState<Memory | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
 
-  // Group memories by location (rounded lat/lng)
-  const groupedMemories = useMemo(() => {
+  // Dynamic grouping function (same as MapContainer)
+  const groupMemoriesByZoom = (memories: Memory[], zoomLevel: number) => {
     const groups: Record<string, Memory[]> = {};
+    
+    let precision: number;
+    if (zoomLevel >= 16) {
+      precision = 5;
+    } else if (zoomLevel >= 14) {
+      precision = 4;
+    } else if (zoomLevel >= 12) {
+      precision = 3;
+    } else if (zoomLevel >= 10) {
+      precision = 2;
+    } else {
+      precision = 1;
+    }
+    
     memories.forEach(mem => {
-      const key = `${mem.lat.toFixed(5)},${mem.lng.toFixed(5)}`;
+      const key = `${mem.lat.toFixed(precision)},${mem.lng.toFixed(precision)}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(mem);
     });
+    
     return groups;
-  }, [memories]);
+  };
 
-  // When a memory is selected, set nav index to its position in the group
-  const handleSelectMemory = (memory: Memory) => {
+  // Load user memories on component mount
+  useEffect(() => {
+    const loadMemories = async () => {
+      if (!token) return;
+      
+      setLoading(true);
+      try {
+        const response = await getUserMemories(token);
+        if (response.memories) {
+          // Convert database memories to frontend format
+          const formattedMemories = response.memories.map((memory: any) => ({
+            id: memory.id,
+            lat: memory.latitude,
+            lng: memory.longitude,
+            imageUrl: memory.imageUrl,
+            title: memory.title,
+            description: memory.description,
+            visitDate: memory.visitDate,
+          }));
+          setMemories(formattedMemories);
+        }
+      } catch (error) {
+        console.error("Error loading memories:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadMemories();
+  }, [token]);
+
+  // When a memory is selected, use the group passed from MapContainer
+  const handleSelectMemory = (memory: Memory, allMemoriesInGroup: Memory[]) => {
+    if (allMemoriesInGroup.length > 1) {
+      // Show gallery for multiple memories
+      setGalleryMemories(allMemoriesInGroup);
+      setShowGallery(true);
+    } else {
+      // Show single memory detail
+      setSelectedMemory(memory);
+      setMemoryNavIndex(0);
+    }
+  };
+
+  // Handle selecting a specific memory from the gallery
+  const handleGalleryMemorySelect = (memory: Memory) => {
+    setShowGallery(false);
     setSelectedMemory(memory);
-    const key = `${memory.lat.toFixed(5)},${memory.lng.toFixed(5)}`;
-    const group = groupedMemories[key] || [];
-    const idx = group.findIndex(m => m === memory);
-    setMemoryNavIndex(idx >= 0 ? idx : 0);
+    setMemoryNavIndex(0);
+  };
+
+  // Handle editing a memory
+  const handleEditMemory = (memory: Memory) => {
+    setEditingMemory(memory);
+    setSelectedMemory(null);
+    setShowGallery(false);
+  };
+
+  // Handle saving edited memory
+  const handleSaveMemory = async (updatedData: {
+    title: string;
+    description: string;
+    mood: string;
+    visitDate: string;
+    imageUrl?: string;
+  }) => {
+    if (!editingMemory?.id || !token) return;
+
+    setEditLoading(true);
+    try {
+      const response = await updateMemory(editingMemory.id, updatedData, token);
+      if (response.memory) {
+        // Update the memory in the local state
+        setMemories(prev => prev.map(mem => 
+          mem.id === editingMemory.id 
+            ? {
+                ...mem,
+                title: response.memory.title,
+                description: response.memory.description,
+                visitDate: response.memory.visitDate,
+                // Note: We don't update lat/lng as they can't be changed
+              }
+            : mem
+        ));
+        setEditingMemory(null);
+      } else {
+        setLocationError(response.error || "Failed to update memory");
+      }
+    } catch (error) {
+      console.error("Error updating memory:", error);
+      setLocationError("Failed to update memory. Please try again.");
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  // Handle deleting a memory
+  const handleDeleteMemory = async () => {
+    if (!editingMemory?.id || !token) return;
+
+    if (!confirm("Are you sure you want to delete this memory?")) return;
+
+    setEditLoading(true);
+    try {
+      const response = await deleteMemory(editingMemory.id, token);
+      if (response.message) {
+        // Remove the memory from local state
+        setMemories(prev => prev.filter(mem => mem.id !== editingMemory.id));
+        setEditingMemory(null);
+      } else {
+        setLocationError(response.error || "Failed to delete memory");
+      }
+    } catch (error) {
+      console.error("Error deleting memory:", error);
+      setLocationError("Failed to delete memory. Please try again.");
+    } finally {
+      setEditLoading(false);
+    }
   };
 
   const handlePlusClick = () => {
@@ -57,31 +196,126 @@ const MapPage: React.FC = () => {
     }
   };
 
-  const handleSubmit = (data: any) => {
-    const addMemory = (imageUrl?: string) => {
-      setMemories((prev) => [
-        ...prev,
-        {
-          lat: pending!.lat,
-          lng: pending!.lng,
-          imageUrl,
+  // Handle manual location selection by clicking on the map
+  const handleMapClick = (lat: number, lng: number) => {
+    setLocationError(null);
+    setPending({ lat, lng });
+  };
+
+  const handleSubmit = async (data: any) => {
+    console.log("HandleSubmit called with data:", data);
+    console.log("Token available:", !!token);
+    console.log("Pending location:", pending);
+
+    if (!token || !pending) {
+      console.error("Missing token or pending location");
+      setLocationError("Authentication error. Please try logging in again.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const processAndSaveMemory = async (imageUrl?: string) => {
+        const memoryData = {
           title: data.title,
           description: data.description,
+          mood: data.mood,
+          latitude: pending.lat,
+          longitude: pending.lng,
+          imageUrl,
           visitDate: data.visitDate,
-        },
-      ]);
-    };
-    if (data.files && data.files.length > 0) {
-      const file = data.files[0];
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        addMemory(e.target?.result as string);
+        };
+
+        console.log("Saving memory with data:", memoryData);
+        
+        try {
+          const response = await createMemory(memoryData, token);
+          console.log("Create memory response:", response);
+          
+          if (response.memory) {
+            // Add to local state for immediate UI update
+            const newMemory = {
+              lat: pending.lat,
+              lng: pending.lng,
+              imageUrl,
+              title: data.title,
+              description: data.description,
+              visitDate: data.visitDate,
+            };
+            setMemories((prev) => [...prev, newMemory]);
+            console.log("Memory added to local state");
+          } else if (response.error) {
+            console.error("Backend error:", response.error);
+            setLocationError(`Failed to save memory: ${response.error}`);
+          }
+        } catch (saveError) {
+          console.error("Error in createMemory:", saveError);
+          setLocationError("Failed to save memory. Please check your connection.");
+        }
       };
-      reader.readAsDataURL(file);
-    } else {
-      addMemory();
+
+      if (data.files && data.files.length > 0) {
+        const file = data.files[0];
+        
+        // Compress image if it's too large
+        const compressImage = (file: File): Promise<string> => {
+          return new Promise((resolve, reject) => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            img.onload = () => {
+              // Calculate new dimensions (max 800x800)
+              const maxSize = 800;
+              let { width, height } = img;
+              
+              if (width > height) {
+                if (width > maxSize) {
+                  height = (height * maxSize) / width;
+                  width = maxSize;
+                }
+              } else {
+                if (height > maxSize) {
+                  width = (width * maxSize) / height;
+                  height = maxSize;
+                }
+              }
+              
+              canvas.width = width;
+              canvas.height = height;
+              
+              // Draw and compress
+              ctx?.drawImage(img, 0, 0, width, height);
+              resolve(canvas.toDataURL('image/jpeg', 0.8)); // 80% quality
+            };
+            
+            img.onerror = reject;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              img.src = e.target?.result as string;
+            };
+            reader.readAsDataURL(file);
+          });
+        };
+        
+        try {
+          const compressedImage = await compressImage(file);
+          await processAndSaveMemory(compressedImage);
+        } catch (fileError) {
+          console.error("Error processing file:", fileError);
+          setLocationError("Failed to process image. Please try again.");
+        }
+      } else {
+        await processAndSaveMemory();
+      }
+    } catch (error) {
+      console.error("Error in handleSubmit:", error);
+      setLocationError("Failed to save memory. Please try again.");
+    } finally {
+      setLoading(false);
+      setPending(null);
     }
-    setPending(null);
   };
 
   return (
@@ -92,16 +326,24 @@ const MapPage: React.FC = () => {
       >
         WNDR
       </div>
+      
+      {/* Instruction overlay */}
+      <div className="absolute top-24 left-1/2 transform -translate-x-1/2 z-10 pointer-events-none">
+        <div className="bg-white bg-opacity-90 backdrop-blur-sm px-4 py-2 rounded-full shadow-neu-btn text-sm text-charcoal font-medium">
+          📍 Click anywhere on the map to add a memory
+        </div>
+      </div>
       {/* Plus button in top right */}
       <button
         className="absolute top-4 right-4 z-50 bg-coral text-charcoal rounded-xl w-14 h-14 flex items-center justify-center shadow-neu-btn hover:shadow-neu-in text-3xl focus:outline-none transition-all border border-warmgray"
         onClick={handlePlusClick}
-        aria-label="Add Memory"
+        aria-label="Add Memory at Current Location"
+        title="Add memory at your current location"
       >
         +
       </button>
       <MapContainer
-        onMapClick={() => {}}
+        onMapClick={handleMapClick}
         memories={memories}
         onMarkerClick={handleSelectMemory}
       />
@@ -113,10 +355,25 @@ const MapPage: React.FC = () => {
           onCancel={() => setPending(null)}
         />
       )}
-      {selectedMemory && (() => {
-        const key = `${selectedMemory.lat.toFixed(5)},${selectedMemory.lng.toFixed(5)}`;
-        const group = groupedMemories[key] || [];
-        const current = group[memoryNavIndex] || selectedMemory;
+      {editingMemory && (
+        <MemoryEditForm
+          memory={editingMemory}
+          onSave={handleSaveMemory}
+          onCancel={() => setEditingMemory(null)}
+          onDelete={handleDeleteMemory}
+          loading={editLoading}
+        />
+      )}
+      {showGallery && (
+        <MemoryGallery
+          memories={galleryMemories}
+          onClose={() => setShowGallery(false)}
+          onSelectMemory={handleGalleryMemorySelect}
+          onEditMemory={handleEditMemory}
+        />
+      )}
+      {selectedMemory && !showGallery && (() => {
+        const current = selectedMemory;
         return (
           <div className="fixed inset-0 z-50 flex flex-col justify-end pointer-events-none">
             {/* Overlay */}
@@ -140,31 +397,26 @@ const MapPage: React.FC = () => {
                 )}
                 <h3 className="text-lg font-semibold mb-1 text-center text-warmgray">{current.visitDate}</h3>
                 <h1 className="text-2xl font-bold mb-2 text-center text-charcoal">{current.title}</h1>
-                <p className="text-charcoal text-center mb-2">{current.description}</p>
+                <p className="text-charcoal text-center mb-4">{current.description}</p>
+                
+                {/* Edit Button */}
+                <button
+                  onClick={() => handleEditMemory(current)}
+                  className="bg-coral text-white px-4 py-2 rounded-lg font-medium hover:bg-opacity-90 transition flex items-center gap-2"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit Memory
+                </button>
               </div>
-              {/* Arrows for navigation if multiple memories */}
-              {group.length > 1 && (
-                <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between px-4 pointer-events-none">
-                  <button
-                    className="pointer-events-auto bg-white bg-opacity-80 rounded-full p-2 shadow hover:bg-opacity-100 transition"
-                    style={{ visibility: memoryNavIndex > 0 ? 'visible' : 'hidden' }}
-                    onClick={() => setMemoryNavIndex(i => Math.max(0, i - 1))}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-6 h-6 text-charcoal">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <button
-                    className="pointer-events-auto bg-white bg-opacity-80 rounded-full p-2 shadow hover:bg-opacity-100 transition"
-                    style={{ visibility: memoryNavIndex < group.length - 1 ? 'visible' : 'hidden' }}
-                    onClick={() => setMemoryNavIndex(i => Math.min(group.length - 1, i + 1))}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-6 h-6 text-charcoal">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </div>
-              )}
               {/* Drag handle */}
               <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-warmgray rounded-full mb-4" />
             </div>
@@ -180,7 +432,10 @@ const MapPage: React.FC = () => {
       <div className="fixed bottom-4 left-0 right-0 z-50 flex justify-center">
         <div className="flex items-center justify-between px-4 py-2 bg-white rounded-full shadow-neu-sw backdrop-blur-md max-w-md w-full mx-auto">
           {/* Profile Avatar */}
-          <div className="w-10 h-10 rounded-full shadow-neu-in bg-warmgray flex items-center justify-center">
+          <button
+            onClick={() => navigate("/account")}
+            className="w-10 h-10 rounded-full shadow-neu-in bg-warmgray flex items-center justify-center hover:bg-opacity-80 transition-all"
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
@@ -191,24 +446,33 @@ const MapPage: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
             </svg>
-          </div>
+          </button>
           {/* Nav Buttons */}
           <div className="flex gap-4 mx-auto text-sm font-medium text-gray-700">
             <button className="hover:text-black transition">Challenges</button>
-            <button className="hover:text-black transition">Memories</button>
+            <button 
+              onClick={() => navigate("/memories")}
+              className="hover:text-black transition"
+            >
+              Memories
+            </button>
             <button className="hover:text-black transition">Friends</button>
           </div>
-          {/* Settings Cogwheel */}
-          <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition">
+          {/* Logout Button */}
+          <button 
+            onClick={logout}
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-100 transition-all group"
+            title="Logout"
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              fill="none" viewBox="0 0 24 24" stroke="currentColor"
-              className="w-5 h-5 text-gray-700"
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+              className="w-5 h-5 text-gray-700 group-hover:text-red-600 transition-colors"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M12 8c-.962 0-1.842.389-2.475 1.025a3.5 3.5 0 000 4.95A3.482 3.482 0 0012 15.5a3.5 3.5 0 100-7z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M12 3v1.5m6.364 1.636l-1.06 1.06m2.121 4.304H21m-1.636 6.364l-1.06-1.06M12 21v-1.5m-6.364-1.636l1.06-1.06M3 12h1.5m1.636-6.364l1.06 1.06" />
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
           </button>
         </div>

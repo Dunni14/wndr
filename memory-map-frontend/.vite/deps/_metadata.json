@@ -1,0 +1,55 @@
+{
+  "hash": "4a660280",
+  "configHash": "9981b4f3",
+  "lockfileHash": "e0e8d56b",
+  "browserHash": "62cac621",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "211e8927",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "de3ecd8c",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "280202c9",
+      "needsInterop": true
+    },
+    "react-router-dom": {
+      "src": "../../node_modules/react-router-dom/dist/index.mjs",
+      "file": "react-router-dom.js",
+      "fileHash": "07d761b1",
+      "needsInterop": false
+    },
+    "framer-motion": {
+      "src": "../../node_modules/framer-motion/dist/es/index.mjs",
+      "file": "framer-motion.js",
+      "fileHash": "21fd3f6b",
+      "needsInterop": false
+    },
+    "@googlemaps/js-api-loader": {
+      "src": "../../node_modules/@googlemaps/js-api-loader/dist/index.mjs",
+      "file": "@googlemaps_js-api-loader.js",
+      "fileHash": "021b2d7e",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-5HNGYYSW": {
+      "file": "chunk-5HNGYYSW.js"
+    },
+    "chunk-TVFQMRVC": {
+      "file": "chunk-TVFQMRVC.js"
+    },
+    "chunk-G3PMV62Z": {
+      "file": "chunk-G3PMV62Z.js"
+    }
+  }
+}

@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
+import "react-phone-input-2/lib/style.css";
+import PhoneInput from "react-phone-input-2";
 
 interface PhoneInputProps {
   onSubmit: (phone: string) => void;
@@ -6,24 +8,28 @@ interface PhoneInputProps {
   error?: string | null;
 }
 
-const PhoneInput: React.FC<PhoneInputProps> = ({ onSubmit, loading, error }) => {
-  const [phone, setPhone] = useState("");
+const PhoneInputComponent: React.FC<PhoneInputProps> = ({ onSubmit, loading, error }) => {
+  const [phone, setPhone] = React.useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(phone);
+    onSubmit("+" + phone); // Ensures E.164 format
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-xs mx-auto">
       <label className="block text-sm font-medium text-gray-700">Phone Number</label>
-      <input
-        type="tel"
+      <PhoneInput
+        country={"us"}
         value={phone}
-        onChange={e => setPhone(e.target.value)}
-        className="w-full px-3 py-2 border rounded focus:outline-none focus:ring"
-        placeholder="+1234567890"
-        required
+        onChange={setPhone}
+        inputClass="w-full px-3 py-2 border rounded focus:outline-none focus:ring"
+        inputProps={{
+          name: "phone",
+          required: true,
+          autoFocus: true,
+        }}
+        disabled={loading}
       />
       {error && <div className="text-red-500 text-sm">{error}</div>}
       <button
@@ -37,4 +43,4 @@ const PhoneInput: React.FC<PhoneInputProps> = ({ onSubmit, loading, error }) => 
   );
 };
 
-export default PhoneInput; 
+export default PhoneInputComponent; 

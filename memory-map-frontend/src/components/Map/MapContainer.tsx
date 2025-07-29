@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Loader } from '@googlemaps/js-api-loader';
 
 interface Memory {
+  id?: string;
   lat: number;
   lng: number;
   imageUrl?: string;
@@ -13,7 +14,7 @@ interface Memory {
 interface MapContainerProps {
   onMapClick: (lat: number, lng: number) => void;
   memories?: Memory[];
-  onMarkerClick?: (memory: Memory) => void;
+  onMarkerClick?: (memory: Memory, allMemoriesInGroup: Memory[]) => void;
 }
 
 const pinEmojiDataUrl =
@@ -22,19 +23,38 @@ const pinEmojiDataUrl =
     `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><text x="0" y="40" font-size="48">📍</text></svg>`
   );
 
-function groupMemories(memories: Memory[]) {
+function groupMemoriesByZoom(memories: Memory[], zoomLevel: number) {
   const groups: Record<string, Memory[]> = {};
+  
+  // Dynamic precision based on zoom level
+  // Higher zoom = more precision = less grouping
+  // Lower zoom = less precision = more grouping
+  let precision: number;
+  if (zoomLevel >= 16) {
+    precision = 5; // Very detailed - group only exact locations
+  } else if (zoomLevel >= 14) {
+    precision = 4; // Detailed - group very close memories
+  } else if (zoomLevel >= 12) {
+    precision = 3; // Medium - group nearby memories
+  } else if (zoomLevel >= 10) {
+    precision = 2; // Broad - group memories in same area
+  } else {
+    precision = 1; // Very broad - group memories in same city/region
+  }
+  
   memories.forEach(mem => {
-    const key = `${mem.lat.toFixed(5)},${mem.lng.toFixed(5)}`;
+    const key = `${mem.lat.toFixed(precision)},${mem.lng.toFixed(precision)}`;
     if (!groups[key]) groups[key] = [];
     groups[key].push(mem);
   });
+  
   return groups;
 }
 
 const MapContainer: React.FC<MapContainerProps> = ({ onMapClick, memories = [], onMarkerClick }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [zoomLevel, setZoomLevel] = useState<number>(12);
   const markersRef = useRef<google.maps.Marker[]>([]);
   const overlaysRef = useRef<google.maps.OverlayView[]>([]);
 
@@ -53,6 +73,7 @@ const MapContainer: React.FC<MapContainerProps> = ({ onMapClick, memories = [], 
           mapTypeControl: false,
           fullscreenControl: false,
           streetViewControl: false,
+          gestureHandling: 'cooperative',
         });
 
         // Try to center on user location
@@ -77,6 +98,14 @@ const MapContainer: React.FC<MapContainerProps> = ({ onMapClick, memories = [], 
           }
         });
 
+        // Handle zoom change for dynamic clustering
+        mapInstance.addListener('zoom_changed', () => {
+          const newZoom = mapInstance.getZoom() || 12;
+          setZoomLevel(newZoom);
+        });
+
+        // Set initial zoom level
+        setZoomLevel(mapInstance.getZoom() || 12);
         setMap(mapInstance);
       }
     });
@@ -91,7 +120,7 @@ const MapContainer: React.FC<MapContainerProps> = ({ onMapClick, memories = [], 
     markersRef.current = [];
     overlaysRef.current = [];
 
-    const groups = groupMemories(memories);
+    const groups = groupMemoriesByZoom(memories, zoomLevel);
     Object.entries(groups).forEach(([key, group]) => {
       const mostRecent = group[group.length - 1];
       const count = group.length;
@@ -115,7 +144,7 @@ const MapContainer: React.FC<MapContainerProps> = ({ onMapClick, memories = [], 
             this.div.style.boxShadow = '0 2px 8px rgba(0,0,0,0.18)';
             this.div.style.border = '3px solid #fff';
             this.div.style.overflow = 'hidden';
-            this.div.style.zIndex = '1';
+            this.div.style.zIndex = count > 1 ? '10' : '1'; // Higher z-index for multi-memory markers
             // Image
             const img = document.createElement('img');
             img.src = mostRecent.imageUrl!;
@@ -138,7 +167,7 @@ const MapContainer: React.FC<MapContainerProps> = ({ onMapClick, memories = [], 
             this.div.appendChild(pointer);
             // Click handler
             this.div.style.cursor = 'pointer';
-            this.div.onclick = () => onMarkerClick && onMarkerClick(mostRecent);
+            this.div.onclick = () => onMarkerClick && onMarkerClick(mostRecent, group);
             const panes = this.getPanes();
             if (panes) panes.overlayMouseTarget.appendChild(this.div);
           }
@@ -170,33 +199,34 @@ const MapContainer: React.FC<MapContainerProps> = ({ onMapClick, memories = [], 
           },
         });
         if (onMarkerClick) {
-          marker.addListener('click', () => onMarkerClick(mostRecent));
+          marker.addListener('click', () => onMarkerClick(mostRecent, group));
         }
         markersRef.current.push(marker);
       }
 
       // Add badge overlay if more than 1 memory at this location
       if (count > 1) {
+        const isImageMarker = !!mostRecent.imageUrl;
+        
         class BadgeOverlay extends window.google.maps.OverlayView {
           div: HTMLDivElement | null = null;
           onAdd() {
             this.div = document.createElement('div');
-            this.div.className = 'absolute';
             this.div.style.position = 'absolute';
-            this.div.style.top = '-8px';
-            this.div.style.right = '-8px';
-            this.div.style.background = '#FFD2C2'; // coral
-            this.div.style.color = '#333';
+            this.div.style.background = '#FF6B6B'; // More visible red background
+            this.div.style.color = '#fff';
             this.div.style.fontWeight = 'bold';
-            this.div.style.fontSize = '0.75rem';
-            this.div.style.width = '22px';
-            this.div.style.height = '22px';
+            this.div.style.fontSize = '0.7rem';
+            this.div.style.minWidth = '20px';
+            this.div.style.height = '20px';
             this.div.style.display = 'flex';
             this.div.style.alignItems = 'center';
             this.div.style.justifyContent = 'center';
-            this.div.style.borderRadius = '50%';
-            this.div.style.boxShadow = '0 1px 4px rgba(0,0,0,0.15)';
-            this.div.style.zIndex = '1000';
+            this.div.style.borderRadius = '10px';
+            this.div.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
+            this.div.style.zIndex = '1001';
+            this.div.style.border = '2px solid #fff';
+            this.div.style.padding = '2px 4px';
             this.div.innerText = `+${count - 1}`;
             const panes = this.getPanes();
             if (panes) panes.overlayMouseTarget.appendChild(this.div);
@@ -206,8 +236,16 @@ const MapContainer: React.FC<MapContainerProps> = ({ onMapClick, memories = [], 
             const projection = this.getProjection();
             const pos = projection.fromLatLngToDivPixel(new window.google.maps.LatLng(position.lat, position.lng));
             if (pos) {
-              this.div.style.left = `${pos.x + 10}px`;
-              this.div.style.top = `${pos.y - 32}px`;
+              // Adjust position based on marker type
+              if (isImageMarker) {
+                // Position for image markers (56px wide)
+                this.div.style.left = `${pos.x + 18}px`;
+                this.div.style.top = `${pos.y - 68}px`;
+              } else {
+                // Position for pin markers (40px wide)
+                this.div.style.left = `${pos.x + 12}px`;
+                this.div.style.top = `${pos.y - 45}px`;
+              }
             }
           }
           onRemove() {
@@ -221,9 +259,9 @@ const MapContainer: React.FC<MapContainerProps> = ({ onMapClick, memories = [], 
         overlaysRef.current.push(badgeOverlay);
       }
     });
-  }, [map, memories, onMarkerClick]);
+  }, [map, memories, onMarkerClick, zoomLevel]);
 
-  return <div ref={mapRef} className="w-full h-screen" />;
+  return <div ref={mapRef} className="w-full h-screen cursor-crosshair" />;
 };
 
 export default MapContainer; 

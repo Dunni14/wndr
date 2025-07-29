@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
 import MapPage from "./pages/MapPage";
+import Account from "./pages/Account";
+import Memories from "./pages/Memories";
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth()!;
@@ -28,6 +30,14 @@ const AppRoutes: React.FC = () => {
       <Route
         path="/map"
         element={token ? <MapPage /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/account"
+        element={token ? <Account /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/memories"
+        element={token ? <Memories /> : <Navigate to="/login" replace />}
       />
       <Route
         path="/"

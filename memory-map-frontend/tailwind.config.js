@@ -20,7 +20,8 @@ export default {
         charcoal: '#333333',
       },
       fontFamily: {
-        logo: ['Orbitron', 'sans-serif'],
+        sans: ['Racing Sans One', 'sans-serif'],
+        logo: ['Racing Sans One', 'sans-serif'],
       },
     },
   },

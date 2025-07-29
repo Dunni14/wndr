@@ -4,6 +4,8 @@ interface AuthContextType {
   user: any;
   token: string | null;
   login: (userData: any, jwt: string) => void;
+  logout: () => void;
+  updateUser: (userData: any) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -18,8 +20,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem("token", jwt);
   };
 
+  const logout = () => {
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem("token");
+  };
+
+  const updateUser = (userData: any) => {
+    setUser(userData);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login }}>
+    <AuthContext.Provider value={{ user, token, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
