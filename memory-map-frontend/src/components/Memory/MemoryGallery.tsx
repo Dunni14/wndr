@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { formatShortDate } from '../../utils/dateUtils';
 
 interface Memory {
   id?: string;
@@ -102,7 +103,7 @@ const MemoryGallery: React.FC<MemoryGalleryProps> = ({ memories, onClose, onSele
                       {memory.description || 'No description'}
                     </p>
                     <div className="text-xs text-coral font-medium">
-                      {memory.visitDate ? new Date(memory.visitDate).toLocaleDateString() : 'No date'}
+                      {formatShortDate(memory.visitDate)}
                     </div>
                   </div>
 

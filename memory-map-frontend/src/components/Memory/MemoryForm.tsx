@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import PlacesAutocomplete from '../Places/PlacesAutocomplete';
 
 interface MemoryFormProps {
   latitude: number;
@@ -12,6 +13,7 @@ interface MemoryFormProps {
     files: File[];
   }) => void;
   onCancel: () => void;
+  onLocationChange?: (lat: number, lng: number) => void;
 }
 
 // Add your Google Maps API key here or import from config
@@ -47,7 +49,8 @@ const MemoryForm: React.FC<MemoryFormProps> = ({
   latitude,
   longitude,
   onSubmit,
-  onCancel
+  onCancel,
+  onLocationChange
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -56,15 +59,29 @@ const MemoryForm: React.FC<MemoryFormProps> = ({
   const [files, setFiles] = useState<File[]>([]);
   const [loadingAI, setLoadingAI] = useState(false);
   const [locationName, setLocationName] = useState('');
+  const [currentLatitude, setCurrentLatitude] = useState(latitude);
+  const [currentLongitude, setCurrentLongitude] = useState(longitude);
 
   // Fetch location name when lat/lng change
   useEffect(() => {
     let isMounted = true;
-    getLocationName(latitude, longitude).then(name => {
+    getLocationName(currentLatitude, currentLongitude).then(name => {
       if (isMounted) setLocationName(name);
     });
     return () => { isMounted = false; };
-  }, [latitude, longitude]);
+  }, [currentLatitude, currentLongitude]);
+
+  // Handle place selection from autocomplete
+  const handlePlaceSelect = (place: {
+    description: string;
+    lat: number;
+    lng: number;
+    placeId: string;
+  }) => {
+    setCurrentLatitude(place.lat);
+    setCurrentLongitude(place.lng);
+    onLocationChange?.(place.lat, place.lng);
+  };
 
   useEffect(() => {
     if (mood && locationName) {
@@ -93,6 +110,22 @@ const MemoryForm: React.FC<MemoryFormProps> = ({
             e.preventDefault();
             onSubmit({ title, description, mood, visitDate, files });
           }} className="space-y-4">
+            {/* Location Search */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Location
+              </label>
+              <PlacesAutocomplete
+                onPlaceSelect={handlePlaceSelect}
+                placeholder="Search for a location or use current position"
+                value={locationName}
+                disabled={loadingAI}
+              />
+              <div className="text-xs text-gray-500">
+                📍 Current: {currentLatitude.toFixed(6)}, {currentLongitude.toFixed(6)}
+              </div>
+            </div>
+            
             <input
               type="text" placeholder="Title"
               value={title} onChange={e => setTitle(e.target.value)}

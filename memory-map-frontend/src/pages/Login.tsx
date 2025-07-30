@@ -53,7 +53,7 @@ const Login: React.FC = () => {
       console.log("verifyOTP response", res);
       if (res.token) {
         login(res.user, res.token);
-        navigate("/map"); // redirect to WNDR maps page
+        navigate("/home"); // redirect to WNDR home page
       } else {
         setError(res.error || "OTP verification failed");
       }

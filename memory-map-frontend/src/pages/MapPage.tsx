@@ -1,11 +1,16 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import MapContainer from "../components/Map/MapContainer";
+import MapTypeSelector from "../components/Map/MapTypeSelector";
+import StreetViewModal from "../components/Map/StreetViewModal";
 import MemoryForm from "../components/Memory/MemoryForm";
 import MemoryGallery from "../components/Memory/MemoryGallery";
 import MemoryEditForm from "../components/Memory/MemoryEditForm";
+import MemoryTimeline from "../components/Timeline/MemoryTimeline";
 import { getUserMemories, createMemory, updateMemory, deleteMemory } from "../services/api";
+import { formatMemoryDate } from "../utils/dateUtils";
 
 interface Memory {
   id?: string;
@@ -30,6 +35,22 @@ const MapPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [editingMemory, setEditingMemory] = useState<Memory | null>(null);
   const [editLoading, setEditLoading] = useState(false);
+  const [mapType, setMapType] = useState<string>('roadmap');
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  const [is3D, setIs3D] = useState<boolean>(false);
+  const [streetViewMemory, setStreetViewMemory] = useState<Memory | null>(null);
+  const [showTimeline, setShowTimeline] = useState<boolean>(false);
+  
+  // Handle location change from MemoryForm
+  const handleLocationChange = (lat: number, lng: number) => {
+    setPending({ lat, lng });
+  };
+
+  // Handle timeline memory click
+  const handleTimelineMemoryClick = (memory: Memory) => {
+    setShowTimeline(false);
+    setSelectedMemory(memory);
+  };
 
   // Dynamic grouping function (same as MapContainer)
   const groupMemoriesByZoom = (memories: Memory[], zoomLevel: number) => {
@@ -342,10 +363,21 @@ const MapPage: React.FC = () => {
       >
         +
       </button>
+      <MapTypeSelector
+        selectedMapType={mapType}
+        onMapTypeChange={setMapType}
+        isDarkMode={isDarkMode}
+        onDarkModeToggle={() => setIsDarkMode(!isDarkMode)}
+        is3D={is3D}
+        on3DToggle={() => setIs3D(!is3D)}
+      />
       <MapContainer
         onMapClick={handleMapClick}
         memories={memories}
         onMarkerClick={handleSelectMemory}
+        mapType={mapType}
+        isDarkMode={isDarkMode}
+        is3D={is3D}
       />
       {pending && (
         <MemoryForm
@@ -353,6 +385,7 @@ const MapPage: React.FC = () => {
           longitude={pending.lng}
           onSubmit={handleSubmit}
           onCancel={() => setPending(null)}
+          onLocationChange={handleLocationChange}
         />
       )}
       {editingMemory && (
@@ -372,21 +405,28 @@ const MapPage: React.FC = () => {
           onEditMemory={handleEditMemory}
         />
       )}
-      {selectedMemory && !showGallery && (() => {
-        const current = selectedMemory;
-        return (
-          <div className="fixed inset-0 z-50 flex flex-col justify-end pointer-events-none">
-            {/* Overlay */}
-            <div
-              className="absolute inset-0 bg-lavender bg-opacity-70 pointer-events-auto"
-              onClick={() => setSelectedMemory(null)}
-            />
-            {/* Bottom sheet */}
-            <div
-              className="relative w-full max-w-2xl mx-auto bg-mint rounded-t-3xl p-6 shadow-neu-sw pointer-events-auto animate-slideUp border-t-2 border-warmgray"
-              style={{ minHeight: '40vh' }}
-              onClick={e => e.stopPropagation()}
-            >
+      <AnimatePresence>
+        {selectedMemory && !showGallery && (() => {
+          const current = selectedMemory;
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+              {/* Overlay */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-charcoal bg-opacity-70 backdrop-blur-sm pointer-events-auto"
+                onClick={() => setSelectedMemory(null)}
+              />
+              {/* Centered Modal */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="relative w-full max-w-md mx-4 bg-mint rounded-2xl p-6 shadow-neu-sw pointer-events-auto border-2 border-warmgray"
+                onClick={e => e.stopPropagation()}
+              >
               <div className="flex flex-col items-center">
                 {current.imageUrl && (
                   <img
@@ -395,34 +435,54 @@ const MapPage: React.FC = () => {
                     className="w-24 h-24 rounded-full shadow-neu-in object-cover mb-4 border-4 border-cream"
                   />
                 )}
-                <h3 className="text-lg font-semibold mb-1 text-center text-warmgray">{current.visitDate}</h3>
+                <h3 className="text-lg font-semibold mb-1 text-center text-warmgray">
+                  {formatMemoryDate(current.visitDate)}
+                </h3>
                 <h1 className="text-2xl font-bold mb-2 text-center text-charcoal">{current.title}</h1>
                 <p className="text-charcoal text-center mb-4">{current.description}</p>
                 
-                {/* Edit Button */}
-                <button
-                  onClick={() => handleEditMemory(current)}
-                  className="bg-coral text-white px-4 py-2 rounded-lg font-medium hover:bg-opacity-90 transition flex items-center gap-2"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    className="w-4 h-4"
+                {/* Action Buttons */}
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={() => setStreetViewMemory(current)}
+                    className="bg-mint text-charcoal px-4 py-2 rounded-lg font-medium hover:bg-opacity-80 transition flex items-center gap-2"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  Edit Memory
-                </button>
+                    <span className="text-lg">👁️</span>
+                    Street View
+                  </button>
+                  <button
+                    onClick={() => handleEditMemory(current)}
+                    className="bg-coral text-white px-4 py-2 rounded-lg font-medium hover:bg-opacity-90 transition flex items-center gap-2"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      className="w-4 h-4"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit Memory
+                  </button>
+                </div>
               </div>
-              {/* Drag handle */}
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-warmgray rounded-full mb-4" />
+              
+              {/* Close button */}
+              <button
+                onClick={() => setSelectedMemory(null)}
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-coral hover:bg-opacity-80 transition-colors flex items-center justify-center text-white"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              </motion.div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()}
+      </AnimatePresence>
       {locationError && (
         <div className="fixed top-20 right-4 bg-coral text-charcoal px-4 py-2 rounded shadow-neu-btn z-50 border border-warmgray">
           {locationError}
@@ -449,12 +509,24 @@ const MapPage: React.FC = () => {
           </button>
           {/* Nav Buttons */}
           <div className="flex gap-4 mx-auto text-sm font-medium text-gray-700">
-            <button className="hover:text-black transition">Challenges</button>
+            <button 
+              onClick={() => navigate("/home")}
+              className="hover:text-black transition"
+            >
+              Home
+            </button>
             <button 
               onClick={() => navigate("/memories")}
               className="hover:text-black transition"
             >
               Memories
+            </button>
+            <button 
+              onClick={() => setShowTimeline(true)}
+              className="hover:text-black transition flex items-center gap-1"
+            >
+              <span>📅</span>
+              Timeline
             </button>
             <button className="hover:text-black transition">Friends</button>
           </div>
@@ -477,6 +549,25 @@ const MapPage: React.FC = () => {
           </button>
         </div>
       </div>
+      
+      {/* Street View Modal */}
+      {streetViewMemory && (
+        <StreetViewModal
+          lat={streetViewMemory.lat}
+          lng={streetViewMemory.lng}
+          isOpen={!!streetViewMemory}
+          onClose={() => setStreetViewMemory(null)}
+          title={streetViewMemory.title}
+        />
+      )}
+      
+      {/* Memory Timeline */}
+      <MemoryTimeline
+        memories={memories}
+        onMemoryClick={handleTimelineMemoryClick}
+        onClose={() => setShowTimeline(false)}
+        isOpen={showTimeline}
+      />
     </div>
   );
 };

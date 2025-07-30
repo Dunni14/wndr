@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
+import Home from "./pages/Home";
 import MapPage from "./pages/MapPage";
 import Account from "./pages/Account";
 import Memories from "./pages/Memories";
@@ -24,6 +25,10 @@ const AppRoutes: React.FC = () => {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route
+        path="/home"
+        element={token ? <Home /> : <Navigate to="/login" replace />}
+      />
+      <Route
         path="/dashboard"
         element={token ? <Dashboard /> : <Navigate to="/login" replace />}
       />
@@ -41,7 +46,7 @@ const AppRoutes: React.FC = () => {
       />
       <Route
         path="/"
-        element={<Navigate to={token ? "/map" : "/login"} replace />}
+        element={<Navigate to={token ? "/home" : "/login"} replace />}
       />
     </Routes>
   );

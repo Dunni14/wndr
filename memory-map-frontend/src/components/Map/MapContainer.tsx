@@ -15,6 +15,9 @@ interface MapContainerProps {
   onMapClick: (lat: number, lng: number) => void;
   memories?: Memory[];
   onMarkerClick?: (memory: Memory, allMemoriesInGroup: Memory[]) => void;
+  mapType?: string;
+  isDarkMode?: boolean;
+  is3D?: boolean;
 }
 
 const pinEmojiDataUrl =
@@ -24,34 +27,135 @@ const pinEmojiDataUrl =
   );
 
 function groupMemoriesByZoom(memories: Memory[], zoomLevel: number) {
+  // Enhanced density-based clustering algorithm
   const groups: Record<string, Memory[]> = {};
   
-  // Dynamic precision based on zoom level
-  // Higher zoom = more precision = less grouping
-  // Lower zoom = less precision = more grouping
-  let precision: number;
-  if (zoomLevel >= 16) {
-    precision = 5; // Very detailed - group only exact locations
-  } else if (zoomLevel >= 14) {
-    precision = 4; // Detailed - group very close memories
-  } else if (zoomLevel >= 12) {
-    precision = 3; // Medium - group nearby memories
-  } else if (zoomLevel >= 10) {
-    precision = 2; // Broad - group memories in same area
-  } else {
-    precision = 1; // Very broad - group memories in same city/region
-  }
+  // Dynamic clustering parameters based on zoom level
+  let clusterRadius: number; // in degrees
+  let minPointsForCluster: number;
   
-  memories.forEach(mem => {
-    const key = `${mem.lat.toFixed(precision)},${mem.lng.toFixed(precision)}`;
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(mem);
+  if (zoomLevel >= 16) {
+    clusterRadius = 0.0001; // ~11 meters
+    minPointsForCluster = 2;
+  } else if (zoomLevel >= 14) {
+    clusterRadius = 0.0005; // ~55 meters
+    minPointsForCluster = 2;
+  } else if (zoomLevel >= 12) {
+    clusterRadius = 0.002; // ~220 meters
+    minPointsForCluster = 2;
+  } else if (zoomLevel >= 10) {
+    clusterRadius = 0.008; // ~900 meters
+    minPointsForCluster = 2;
+  } else if (zoomLevel >= 8) {
+    clusterRadius = 0.03; // ~3.3 km
+    minPointsForCluster = 2;
+  } else if (zoomLevel >= 6) {
+    clusterRadius = 0.12; // ~13 km
+    minPointsForCluster = 3;
+  } else {
+    clusterRadius = 0.5; // ~55 km
+    minPointsForCluster = 3;
+  }
+
+  // DBSCAN-inspired clustering algorithm
+  const visited = new Set<number>();
+  const clustered = new Set<number>();
+  let clusterId = 0;
+
+  const calculateDistance = (mem1: Memory, mem2: Memory): number => {
+    const latDiff = mem1.lat - mem2.lat;
+    const lngDiff = mem1.lng - mem2.lng;
+    return Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+  };
+
+  const getNeighbors = (memoryIndex: number): number[] => {
+    const neighbors: number[] = [];
+    const currentMemory = memories[memoryIndex];
+    
+    memories.forEach((memory, index) => {
+      if (index !== memoryIndex && calculateDistance(currentMemory, memory) <= clusterRadius) {
+        neighbors.push(index);
+      }
+    });
+    
+    return neighbors;
+  };
+
+  const expandCluster = (memoryIndex: number, neighbors: number[], cluster: Memory[]): boolean => {
+    cluster.push(memories[memoryIndex]);
+    clustered.add(memoryIndex);
+
+    for (let i = 0; i < neighbors.length; i++) {
+      const neighborIndex = neighbors[i];
+      
+      if (!visited.has(neighborIndex)) {
+        visited.add(neighborIndex);
+        const neighborNeighbors = getNeighbors(neighborIndex);
+        
+        if (neighborNeighbors.length >= minPointsForCluster - 1) {
+          neighbors.push(...neighborNeighbors.filter(n => !neighbors.includes(n)));
+        }
+      }
+      
+      if (!clustered.has(neighborIndex)) {
+        cluster.push(memories[neighborIndex]);
+        clustered.add(neighborIndex);
+      }
+    }
+    
+    return true;
+  };
+
+  // Main clustering loop
+  memories.forEach((memory, index) => {
+    if (visited.has(index)) return;
+    
+    visited.add(index);
+    const neighbors = getNeighbors(index);
+    
+    if (neighbors.length >= minPointsForCluster - 1) {
+      // Create new cluster
+      const cluster: Memory[] = [];
+      expandCluster(index, neighbors, cluster);
+      
+      if (cluster.length > 0) {
+        // Use centroid as cluster key
+        const centroidLat = cluster.reduce((sum, mem) => sum + mem.lat, 0) / cluster.length;
+        const centroidLng = cluster.reduce((sum, mem) => sum + mem.lng, 0) / cluster.length;
+        const key = `cluster_${clusterId}_${centroidLat.toFixed(6)}_${centroidLng.toFixed(6)}`;
+        groups[key] = cluster;
+        clusterId++;
+      }
+    } else {
+      // Single point (noise in DBSCAN terms, but we'll keep it as individual point)
+      if (!clustered.has(index)) {
+        const key = `single_${index}_${memory.lat.toFixed(6)}_${memory.lng.toFixed(6)}`;
+        groups[key] = [memory];
+      }
+    }
   });
+
+  // Fallback to grid-based clustering for very high zoom levels or if no clusters formed
+  if (Object.keys(groups).length === 0 || zoomLevel >= 18) {
+    memories.forEach(mem => {
+      const precision = Math.max(6, 8 - Math.floor(zoomLevel / 2));
+      const key = `grid_${mem.lat.toFixed(precision)}_${mem.lng.toFixed(precision)}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(mem);
+    });
+  }
   
   return groups;
 }
 
-const MapContainer: React.FC<MapContainerProps> = ({ onMapClick, memories = [], onMarkerClick }) => {
+const MapContainer: React.FC<MapContainerProps> = ({ 
+  onMapClick, 
+  memories = [], 
+  onMarkerClick, 
+  mapType = 'roadmap', 
+  isDarkMode = false, 
+  is3D = false
+}) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(12);
@@ -74,6 +178,87 @@ const MapContainer: React.FC<MapContainerProps> = ({ onMapClick, memories = [], 
           fullscreenControl: false,
           streetViewControl: false,
           gestureHandling: 'cooperative',
+          mapTypeId: mapType as google.maps.MapTypeId,
+          styles: isDarkMode ? [
+            { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+            { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+            { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+            {
+              featureType: "administrative.locality",
+              elementType: "labels.text.fill",
+              stylers: [{ color: "#d59563" }]
+            },
+            {
+              featureType: "poi",
+              elementType: "labels.text.fill",
+              stylers: [{ color: "#d59563" }]
+            },
+            {
+              featureType: "poi.park",
+              elementType: "geometry",
+              stylers: [{ color: "#263c3f" }]
+            },
+            {
+              featureType: "poi.park",
+              elementType: "labels.text.fill",
+              stylers: [{ color: "#6b9a76" }]
+            },
+            {
+              featureType: "road",
+              elementType: "geometry",
+              stylers: [{ color: "#38414e" }]
+            },
+            {
+              featureType: "road",
+              elementType: "geometry.stroke",
+              stylers: [{ color: "#212a37" }]
+            },
+            {
+              featureType: "road",
+              elementType: "labels.text.fill",
+              stylers: [{ color: "#9ca5b3" }]
+            },
+            {
+              featureType: "road.highway",
+              elementType: "geometry",
+              stylers: [{ color: "#746855" }]
+            },
+            {
+              featureType: "road.highway",
+              elementType: "geometry.stroke",
+              stylers: [{ color: "#1f2835" }]
+            },
+            {
+              featureType: "road.highway",
+              elementType: "labels.text.fill",
+              stylers: [{ color: "#f3d19c" }]
+            },
+            {
+              featureType: "transit",
+              elementType: "geometry",
+              stylers: [{ color: "#2f3948" }]
+            },
+            {
+              featureType: "transit.station",
+              elementType: "labels.text.fill",
+              stylers: [{ color: "#d59563" }]
+            },
+            {
+              featureType: "water",
+              elementType: "geometry",
+              stylers: [{ color: "#17263c" }]
+            },
+            {
+              featureType: "water",
+              elementType: "labels.text.fill",
+              stylers: [{ color: "#515c6d" }]
+            },
+            {
+              featureType: "water",
+              elementType: "labels.text.stroke",
+              stylers: [{ color: "#17263c" }]
+            }
+          ] : undefined,
         });
 
         // Try to center on user location
@@ -110,6 +295,125 @@ const MapContainer: React.FC<MapContainerProps> = ({ onMapClick, memories = [], 
       }
     });
   }, [onMapClick]);
+
+  // Update map type when props change
+  useEffect(() => {
+    if (!map) return;
+    
+    // Handle globe view separately
+    if (mapType === 'globe') {
+      // Set to satellite view for the globe effect
+      map.setMapTypeId('satellite');
+      
+      // Globe view: zoom out to show entire Earth and set center to middle of world
+      map.setCenter({ lat: 0, lng: 0 });
+      map.setZoom(2);
+      
+      // Apply tilt for 3D globe effect - enhanced if 3D mode is enabled
+      map.setTilt(is3D ? 45 : 15);
+      map.setHeading(0);
+    } else {
+      map.setMapTypeId(mapType as google.maps.MapTypeId);
+      
+      // Apply 3D tilt and heading if 3D mode is enabled
+      if (is3D && (mapType === 'satellite' || mapType === 'hybrid')) {
+        map.setTilt(45);
+        map.setHeading(0);
+      } else {
+        map.setTilt(0);
+        map.setHeading(0);
+      }
+    }
+    
+    // Apply dark mode styles only if not in satellite/hybrid/globe mode (as they have their own colors)
+    if (mapType === 'roadmap' || mapType === 'terrain') {
+      map.setOptions({
+        styles: isDarkMode ? [
+          { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+          { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+          { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+          {
+            featureType: "administrative.locality",
+            elementType: "labels.text.fill",
+            stylers: [{ color: "#d59563" }]
+          },
+          {
+            featureType: "poi",
+            elementType: "labels.text.fill",
+            stylers: [{ color: "#d59563" }]
+          },
+          {
+            featureType: "poi.park",
+            elementType: "geometry",
+            stylers: [{ color: "#263c3f" }]
+          },
+          {
+            featureType: "poi.park",
+            elementType: "labels.text.fill",
+            stylers: [{ color: "#6b9a76" }]
+          },
+          {
+            featureType: "road",
+            elementType: "geometry",
+            stylers: [{ color: "#38414e" }]
+          },
+          {
+            featureType: "road",
+            elementType: "geometry.stroke",
+            stylers: [{ color: "#212a37" }]
+          },
+          {
+            featureType: "road",
+            elementType: "labels.text.fill",
+            stylers: [{ color: "#9ca5b3" }]
+          },
+          {
+            featureType: "road.highway",
+            elementType: "geometry",
+            stylers: [{ color: "#746855" }]
+          },
+          {
+            featureType: "road.highway",
+            elementType: "geometry.stroke",
+            stylers: [{ color: "#1f2835" }]
+          },
+          {
+            featureType: "road.highway",
+            elementType: "labels.text.fill",
+            stylers: [{ color: "#f3d19c" }]
+          },
+          {
+            featureType: "transit",
+            elementType: "geometry",
+            stylers: [{ color: "#2f3948" }]
+          },
+          {
+            featureType: "transit.station",
+            elementType: "labels.text.fill",
+            stylers: [{ color: "#d59563" }]
+          },
+          {
+            featureType: "water",
+            elementType: "geometry",
+            stylers: [{ color: "#17263c" }]
+          },
+          {
+            featureType: "water",
+            elementType: "labels.text.fill",
+            stylers: [{ color: "#515c6d" }]
+          },
+          {
+            featureType: "water",
+            elementType: "labels.text.stroke",
+            stylers: [{ color: "#17263c" }]
+          }
+        ] : undefined
+      });
+    } else {
+      // Remove custom styles for satellite/hybrid/globe modes
+      map.setOptions({ styles: undefined });
+    }
+  }, [map, mapType, isDarkMode, is3D]);
 
   // Add markers for grouped memories
   useEffect(() => {

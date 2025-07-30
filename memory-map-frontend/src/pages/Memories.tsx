@@ -182,7 +182,7 @@ const Memories: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <button
-              onClick={() => navigate("/map")}
+              onClick={() => navigate("/home")}
               className="p-2 rounded-full hover:bg-gray-100 transition"
             >
               <svg
@@ -215,10 +215,10 @@ const Memories: React.FC = () => {
             <h2 className="text-xl font-semibold text-charcoal mb-2">No memories yet</h2>
             <p className="text-warmgray mb-6">Start creating memories by adding them to the map!</p>
             <button
-              onClick={() => navigate("/map")}
+              onClick={() => navigate("/home")}
               className="bg-coral text-white px-6 py-3 rounded-lg font-medium hover:bg-opacity-90 transition"
             >
-              Go to Map
+              Go to Home
             </button>
           </div>
         ) : (
