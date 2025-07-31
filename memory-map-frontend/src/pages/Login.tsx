@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import PhoneInput from "../components/Auth/PhoneInput";
-import OTPInput from "../components/Auth/OTPInput";
 import { useAuth } from "../context/SupabaseAuthContext";
 import { useNavigate } from "react-router-dom";
 import SignupForm from "../components/Auth/SignupForm";
@@ -13,7 +12,7 @@ const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [otpRequested, setOtpRequested] = useState(false);
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [signupData, setSignupData] = useState<any>(null);
+  const [_signupData, setSignupData] = useState<any>(null);
   const { signInWithPhone, verifyOTP } = useAuth()!;
   const navigate = useNavigate();
 

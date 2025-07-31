@@ -425,7 +425,7 @@ const MapContainer: React.FC<MapContainerProps> = ({
     overlaysRef.current = [];
 
     const groups = groupMemoriesByZoom(memories, zoomLevel);
-    Object.entries(groups).forEach(([key, group]) => {
+    Object.entries(groups).forEach(([_key, group]) => {
       const mostRecent = group[group.length - 1];
       const count = group.length;
       const position = { lat: mostRecent.lat, lng: mostRecent.lng };

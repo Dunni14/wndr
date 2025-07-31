@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/SupabaseAuthContext";
@@ -24,15 +24,15 @@ interface Memory {
 
 const MapPage: React.FC = () => {
   const navigate = useNavigate();
-  const { signOut, user } = useAuth()!;
+  const { user } = useAuth()!;
   const [pending, setPending] = useState<{ lat: number; lng: number } | null>(null);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [memoryNavIndex, setMemoryNavIndex] = useState<number>(0);
+  const [_memoryNavIndex, setMemoryNavIndex] = useState<number>(0);
   const [showGallery, setShowGallery] = useState(false);
   const [galleryMemories, setGalleryMemories] = useState<Memory[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [_loading, setLoading] = useState(false);
   const [editingMemory, setEditingMemory] = useState<Memory | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [mapType, setMapType] = useState<string>('roadmap');
@@ -53,7 +53,7 @@ const MapPage: React.FC = () => {
   };
 
   // Dynamic grouping function (same as MapContainer)
-  const groupMemoriesByZoom = (memories: Memory[], zoomLevel: number) => {
+  const _groupMemoriesByZoom = (_memories: Memory[], _zoomLevel: number) => {
     const groups: Record<string, Memory[]> = {};
     
     let precision: number;
@@ -484,7 +484,7 @@ const MapPage: React.FC = () => {
           </div>
           {/* Logout Button */}
           <button 
-            onClick={logout}
+            onClick={() => navigate('/login')}
             className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-100 transition-all group"
             title="Logout"
           >

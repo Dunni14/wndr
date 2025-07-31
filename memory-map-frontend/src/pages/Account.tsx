@@ -6,7 +6,7 @@ const Account: React.FC = () => {
   const { user, signOut, updateProfile } = useAuth()!;
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
-  const [editedName, setEditedName] = useState(user?.name || "");
+  const [editedName, setEditedName] = useState(user?.user_metadata?.name || "");
   const [editedEmail, setEditedEmail] = useState(user?.email || "");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -113,7 +113,7 @@ const Account: React.FC = () => {
               />
             ) : (
               <div className="w-full px-3 py-2 bg-mint rounded-lg text-charcoal">
-                {user?.name || "No name set"}
+                {user?.user_metadata?.name || "No name set"}
               </div>
             )}
           </div>
@@ -148,7 +148,7 @@ const Account: React.FC = () => {
           <div>
             <label className="block text-sm font-medium text-warmgray mb-1">Member Since</label>
             <div className="w-full px-3 py-2 bg-gray-100 rounded-lg text-charcoal">
-              {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : "Unknown"}
+              {user?.created_at ? new Date(user.created_at).toLocaleDateString() : "Unknown"}
             </div>
           </div>
         </div>

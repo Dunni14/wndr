@@ -16,7 +16,7 @@ const StreetViewModal: React.FC<StreetViewModalProps> = ({
   title
 }) => {
   const streetViewRef = useRef<HTMLDivElement>(null);
-  const [streetViewService, setStreetViewService] = useState<google.maps.StreetViewService | null>(null);
+  const [_streetViewService, setStreetViewService] = useState<google.maps.StreetViewService | null>(null);
   const [hasStreetView, setHasStreetView] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
