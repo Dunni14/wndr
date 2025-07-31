@@ -70,7 +70,8 @@ const Login: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-purple">
       <div className="bg-white p-6 rounded shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-logo text-center mb-6">WNDR {mode === "login" ? "Login" : "Sign Up"}</h1>
+        <h1 className="text-2xl font-logo text-center mb-2">WNDR {mode === "login" ? "Login" : "Sign Up"}</h1>
+        <h3 className="text-sm text-gray-600 text-center mb-6">Welcome to WNDR (wander), Your personal visual diary. Your memories mapped across the world.</h3>
         
         {mode === "login" ? (
           <form onSubmit={handleLogin} className="space-y-4">
