@@ -52,31 +52,6 @@ const MapPage: React.FC = () => {
     setSelectedMemory(memory);
   };
 
-  // Dynamic grouping function (same as MapContainer)
-  const _groupMemoriesByZoom = (_memories: Memory[], _zoomLevel: number) => {
-    const groups: Record<string, Memory[]> = {};
-    
-    let precision: number;
-    if (zoomLevel >= 16) {
-      precision = 5;
-    } else if (zoomLevel >= 14) {
-      precision = 4;
-    } else if (zoomLevel >= 12) {
-      precision = 3;
-    } else if (zoomLevel >= 10) {
-      precision = 2;
-    } else {
-      precision = 1;
-    }
-    
-    memories.forEach(mem => {
-      const key = `${mem.lat.toFixed(precision)},${mem.lng.toFixed(precision)}`;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(mem);
-    });
-    
-    return groups;
-  };
 
   // Load user memories on component mount
   useEffect(() => {
