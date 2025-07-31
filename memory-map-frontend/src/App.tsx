@@ -21,11 +21,33 @@ const Dashboard: React.FC = () => {
 
 const AppRoutes: React.FC = () => {
   const { user, loading } = useAuth()!;
+  const [showTimeout, setShowTimeout] = React.useState(false)
+  
+  React.useEffect(() => {
+    if (loading) {
+      const timer = setTimeout(() => setShowTimeout(true), 3000)
+      return () => clearTimeout(timer)
+    } else {
+      setShowTimeout(false)
+    }
+  }, [loading])
   
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-purple-600 mb-4"></div>
+        <p className="text-gray-600 mb-2">Loading WNDR...</p>
+        {showTimeout && (
+          <div className="text-center">
+            <p className="text-red-500 text-sm mb-2">Taking longer than expected?</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+            >
+              Refresh Page
+            </button>
+          </div>
+        )}
       </div>
     );
   }

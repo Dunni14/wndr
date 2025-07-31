@@ -28,10 +28,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let mounted = true
+    
+    // Safety timeout to prevent endless loading
+    const loadingTimeout = setTimeout(() => {
+      if (mounted) {
+        console.warn('Auth loading timeout - forcing loading to false')
+        setLoading(false)
+      }
+    }, 5000) // 5 second timeout
+    
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (!mounted) return
+      
+      clearTimeout(loadingTimeout)
+      console.log('Initial session loaded:', { user: session?.user?.id, error })
+      
       setSession(session)
       setUser(session?.user ?? null)
+      setLoading(false)
+    }).catch((error) => {
+      if (!mounted) return
+      
+      clearTimeout(loadingTimeout)
+      console.error('Error getting initial session:', error)
       setLoading(false)
     })
 
@@ -44,14 +65,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         // Create user profile when user signs in (including after email confirmation)
         if (event === 'SIGNED_IN' && session?.user) {
-          await createUserProfile(session.user)
+          try {
+            await createUserProfile(session.user)
+          } catch (error) {
+            console.error('Error creating user profile during auth change:', error)
+          }
         }
         
         setLoading(false)
       }
     )
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      clearTimeout(loadingTimeout)
+      subscription.unsubscribe()
+    }
   }, [])
 
   // Helper function to create user profile
