@@ -63,16 +63,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(session)
         setUser(session?.user ?? null)
         
-        // Create user profile when user signs in (including after email confirmation)
-        if (event === 'SIGNED_IN' && session?.user) {
-          try {
-            await createUserProfile(session.user)
-          } catch (error) {
-            console.error('Error creating user profile during auth change:', error)
-          }
-        }
-        
+        // Set loading to false immediately to unblock the UI
         setLoading(false)
+        
+        // Create user profile when user signs in (non-blocking)
+        if (event === 'SIGNED_IN' && session?.user) {
+          // Run profile creation in background without blocking
+          createUserProfile(session.user).catch(error => {
+            console.error('Background user profile creation failed:', error)
+          })
+        }
       }
     )
 
@@ -86,7 +86,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Helper function to create user profile
   const createUserProfile = async (user: any) => {
     try {
-      const { error: profileError } = await supabase
+      console.log('Creating user profile for:', user.id)
+      
+      const { data, error: profileError } = await supabase
         .from('users')
         .upsert({
           id: user.id,
@@ -95,15 +97,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }, {
           onConflict: 'id'
         })
-        .select()
       
       if (profileError) {
         console.error('Error creating user profile:', profileError)
+        throw profileError
       } else {
-        console.log('User profile created/updated successfully')
+        console.log('User profile created/updated successfully:', data)
       }
     } catch (error) {
       console.error('Error in createUserProfile:', error)
+      // Don't throw the error - we don't want to block the auth flow
     }
   }
 
