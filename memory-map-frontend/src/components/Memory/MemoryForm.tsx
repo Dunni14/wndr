@@ -35,6 +35,16 @@ async function getLocationName(lat: number, lng: number): Promise<string> {
   }
 }
 
+// Mood-based tags mapping
+const moodTags: Record<string, string[]> = {
+  happy: ['joy', 'celebration', 'sunshine', 'laughter'],
+  peaceful: ['calm', 'serene', 'tranquil', 'meditation'],
+  adventurous: ['exploration', 'journey', 'discovery', 'thrill'],
+  nostalgic: ['memories', 'reflection', 'vintage', 'reminiscence'],
+  romantic: ['love', 'intimate', 'dreamy', 'heart'],
+  exciting: ['energy', 'dynamic', 'vibrant', 'rush']
+};
+
 // Placeholder for AI generation function
 async function aiGenerateTitleAndDescription(mood: string, locationName: string) {
   // Simulate API call delay
@@ -61,6 +71,9 @@ const MemoryForm: React.FC<MemoryFormProps> = ({
   const [locationName, setLocationName] = useState('');
   const [currentLatitude, setCurrentLatitude] = useState(latitude);
   const [currentLongitude, setCurrentLongitude] = useState(longitude);
+  const [userHasTypedTitle, setUserHasTypedTitle] = useState(false);
+  const [userHasTypedDescription, setUserHasTypedDescription] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   // Fetch location name when lat/lng change
   useEffect(() => {
@@ -83,16 +96,38 @@ const MemoryForm: React.FC<MemoryFormProps> = ({
     onLocationChange?.(place.lat, place.lng);
   };
 
+  // Update tags when mood changes
   useEffect(() => {
-    if (mood && locationName) {
-      setLoadingAI(true);
-      aiGenerateTitleAndDescription(mood, locationName).then(({ title, description }) => {
-        setTitle(title);
-        setDescription(description);
-        setLoadingAI(false);
-      });
+    if (mood && moodTags[mood]) {
+      setSelectedTags(moodTags[mood]);
+    } else {
+      setSelectedTags([]);
     }
-  }, [mood, locationName]);
+  }, [mood]);
+
+  // Handle AI generation
+  const handleAIGeneration = async () => {
+    if (!mood || !locationName) return;
+    
+    setLoadingAI(true);
+    try {
+      const { title, description } = await aiGenerateTitleAndDescription(mood, locationName);
+      
+      // Only set title if user hasn't typed anything
+      if (!userHasTypedTitle) {
+        setTitle(title);
+      }
+      
+      // Only set description if user hasn't typed anything
+      if (!userHasTypedDescription) {
+        setDescription(description);
+      }
+    } catch (error) {
+      console.error('AI generation failed:', error);
+    } finally {
+      setLoadingAI(false);
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -128,14 +163,22 @@ const MemoryForm: React.FC<MemoryFormProps> = ({
             
             <input
               type="text" placeholder="Title"
-              value={title} onChange={e => setTitle(e.target.value)}
+              value={title} 
+              onChange={e => {
+                setTitle(e.target.value);
+                setUserHasTypedTitle(e.target.value.length > 0);
+              }}
               required
               className="w-full px-3 py-2 border rounded"
               disabled={loadingAI}
             />
             <textarea
               placeholder="Description" rows={3}
-              value={description} onChange={e => setDescription(e.target.value)}
+              value={description} 
+              onChange={e => {
+                setDescription(e.target.value);
+                setUserHasTypedDescription(e.target.value.length > 0);
+              }}
               className="w-full px-3 py-2 border rounded"
               disabled={loadingAI}
             />
@@ -148,19 +191,55 @@ const MemoryForm: React.FC<MemoryFormProps> = ({
               <option value="happy">Happy</option>
               <option value="peaceful">Peaceful</option>
               <option value="adventurous">Adventurous</option>
+              <option value="nostalgic">Nostalgic</option>
+              <option value="romantic">Romantic</option>
+              <option value="exciting">Exciting</option>
             </select>
+            
+            {/* Mood-based tags display */}
+            {selectedTags.length > 0 && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Mood Tags
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {selectedTags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             <input
               type="date" value={visitDate}
               onChange={e => setVisitDate(e.target.value)}
               className="w-full px-3 py-2 border rounded"
               disabled={loadingAI}
             />
-            <input
-              type="file" accept="image/*,video/*" multiple
-              onChange={e => setFiles(Array.from(e.target.files || []))}
-              className="w-full"
-              disabled={loadingAI}
-            />
+            <div className="flex gap-2">
+              <input
+                type="file" accept="image/*,video/*" multiple
+                onChange={e => setFiles(Array.from(e.target.files || []))}
+                className="flex-1"
+                disabled={loadingAI}
+              />
+              <button
+                type="button"
+                onClick={handleAIGeneration}
+                disabled={loadingAI || !mood || !locationName}
+                className={`px-3 py-2 text-sm rounded whitespace-nowrap ${
+                  loadingAI || !mood || !locationName
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                }`}
+              >
+                {loadingAI ? '...' : '✨ AI Generate'}
+              </button>
+            </div>
             {loadingAI && (
               <div className="text-center text-blue-500">Generating title and description...</div>
             )}
