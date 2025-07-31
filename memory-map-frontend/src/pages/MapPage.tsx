@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/SupabaseAuthContext";
 import MapContainer from "../components/Map/MapContainer";
 import MapTypeSelector from "../components/Map/MapTypeSelector";
 import StreetViewModal from "../components/Map/StreetViewModal";
@@ -9,7 +9,7 @@ import MemoryForm from "../components/Memory/MemoryForm";
 import MemoryGallery from "../components/Memory/MemoryGallery";
 import MemoryEditForm from "../components/Memory/MemoryEditForm";
 import MemoryTimeline from "../components/Timeline/MemoryTimeline";
-import { getUserMemories, createMemory, updateMemory, deleteMemory } from "../services/api";
+import { memoryService } from "../services/memoryService";
 import { formatMemoryDate } from "../utils/dateUtils";
 
 interface Memory {
@@ -24,7 +24,7 @@ interface Memory {
 
 const MapPage: React.FC = () => {
   const navigate = useNavigate();
-  const { logout, token } = useAuth()!;
+  const { signOut, user } = useAuth()!;
   const [pending, setPending] = useState<{ lat: number; lng: number } | null>(null);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
@@ -81,24 +81,22 @@ const MapPage: React.FC = () => {
   // Load user memories on component mount
   useEffect(() => {
     const loadMemories = async () => {
-      if (!token) return;
+      if (!user) return;
       
       setLoading(true);
       try {
-        const response = await getUserMemories(token);
-        if (response.memories) {
-          // Convert database memories to frontend format
-          const formattedMemories = response.memories.map((memory: any) => ({
-            id: memory.id,
-            lat: memory.latitude,
-            lng: memory.longitude,
-            imageUrl: memory.imageUrl,
-            title: memory.title,
-            description: memory.description,
-            visitDate: memory.visitDate,
-          }));
-          setMemories(formattedMemories);
-        }
+        const memories = await memoryService.getUserMemories();
+        // Convert database memories to frontend format
+        const formattedMemories = memories.map((memory: any) => ({
+          id: memory.id,
+          lat: memory.latitude,
+          lng: memory.longitude,
+          imageUrl: memory.image_url,
+          title: memory.title,
+          description: memory.description,
+          visitDate: memory.visit_date,
+        }));
+        setMemories(formattedMemories);
       } catch (error) {
         console.error("Error loading memories:", error);
       } finally {
@@ -107,7 +105,7 @@ const MapPage: React.FC = () => {
     };
 
     loadMemories();
-  }, [token]);
+  }, [user]);
 
   // When a memory is selected, use the group passed from MapContainer
   const handleSelectMemory = (memory: Memory, allMemoriesInGroup: Memory[]) => {
@@ -144,28 +142,31 @@ const MapPage: React.FC = () => {
     visitDate: string;
     imageUrl?: string;
   }) => {
-    if (!editingMemory?.id || !token) return;
+    if (!editingMemory?.id) return;
 
     setEditLoading(true);
     try {
-      const response = await updateMemory(editingMemory.id, updatedData, token);
-      if (response.memory) {
-        // Update the memory in the local state
-        setMemories(prev => prev.map(mem => 
-          mem.id === editingMemory.id 
-            ? {
-                ...mem,
-                title: response.memory.title,
-                description: response.memory.description,
-                visitDate: response.memory.visitDate,
-                // Note: We don't update lat/lng as they can't be changed
-              }
-            : mem
-        ));
-        setEditingMemory(null);
-      } else {
-        setLocationError(response.error || "Failed to update memory");
-      }
+      const updatedMemory = await memoryService.updateMemory(editingMemory.id, {
+        title: updatedData.title,
+        description: updatedData.description,
+        mood: updatedData.mood,
+        visit_date: updatedData.visitDate,
+        image_url: updatedData.imageUrl
+      });
+      
+      // Update the memory in the local state
+      setMemories(prev => prev.map(mem => 
+        mem.id === editingMemory.id 
+          ? {
+              ...mem,
+              title: updatedMemory.title,
+              description: updatedMemory.description,
+              visitDate: updatedMemory.visit_date,
+              // Note: We don't update lat/lng as they can't be changed
+            }
+          : mem
+      ));
+      setEditingMemory(null);
     } catch (error) {
       console.error("Error updating memory:", error);
       setLocationError("Failed to update memory. Please try again.");
@@ -176,20 +177,16 @@ const MapPage: React.FC = () => {
 
   // Handle deleting a memory
   const handleDeleteMemory = async () => {
-    if (!editingMemory?.id || !token) return;
+    if (!editingMemory?.id) return;
 
     if (!confirm("Are you sure you want to delete this memory?")) return;
 
     setEditLoading(true);
     try {
-      const response = await deleteMemory(editingMemory.id, token);
-      if (response.message) {
-        // Remove the memory from local state
-        setMemories(prev => prev.filter(mem => mem.id !== editingMemory.id));
-        setEditingMemory(null);
-      } else {
-        setLocationError(response.error || "Failed to delete memory");
-      }
+      await memoryService.deleteMemory(editingMemory.id);
+      // Remove the memory from local state
+      setMemories(prev => prev.filter(mem => mem.id !== editingMemory.id));
+      setEditingMemory(null);
     } catch (error) {
       console.error("Error deleting memory:", error);
       setLocationError("Failed to delete memory. Please try again.");
@@ -225,11 +222,11 @@ const MapPage: React.FC = () => {
 
   const handleSubmit = async (data: any) => {
     console.log("HandleSubmit called with data:", data);
-    console.log("Token available:", !!token);
+    console.log("User available:", !!user);
     console.log("Pending location:", pending);
 
-    if (!token || !pending) {
-      console.error("Missing token or pending location");
+    if (!user || !pending) {
+      console.error("Missing user or pending location");
       setLocationError("Authentication error. Please try logging in again.");
       return;
     }
@@ -243,32 +240,28 @@ const MapPage: React.FC = () => {
           mood: data.mood,
           latitude: pending.lat,
           longitude: pending.lng,
-          imageUrl,
-          visitDate: data.visitDate,
+          image_url: imageUrl,
+          visit_date: data.visitDate,
         };
 
         console.log("Saving memory with data:", memoryData);
         
         try {
-          const response = await createMemory(memoryData, token);
-          console.log("Create memory response:", response);
+          const newMemory = await memoryService.createMemory(memoryData);
+          console.log("Create memory response:", newMemory);
           
-          if (response.memory) {
-            // Add to local state for immediate UI update
-            const newMemory = {
-              lat: pending.lat,
-              lng: pending.lng,
-              imageUrl,
-              title: data.title,
-              description: data.description,
-              visitDate: data.visitDate,
-            };
-            setMemories((prev) => [...prev, newMemory]);
-            console.log("Memory added to local state");
-          } else if (response.error) {
-            console.error("Backend error:", response.error);
-            setLocationError(`Failed to save memory: ${response.error}`);
-          }
+          // Add to local state for immediate UI update
+          const formattedMemory = {
+            id: newMemory.id,
+            lat: pending.lat,
+            lng: pending.lng,
+            imageUrl: newMemory.image_url,
+            title: data.title,
+            description: data.description,
+            visitDate: data.visitDate,
+          };
+          setMemories((prev) => [...prev, formattedMemory]);
+          console.log("Memory added to local state");
         } catch (saveError) {
           console.error("Error in createMemory:", saveError);
           setLocationError("Failed to save memory. Please check your connection.");
@@ -278,54 +271,13 @@ const MapPage: React.FC = () => {
       if (data.files && data.files.length > 0) {
         const file = data.files[0];
         
-        // Compress image if it's too large
-        const compressImage = (file: File): Promise<string> => {
-          return new Promise((resolve, reject) => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const img = new Image();
-            
-            img.onload = () => {
-              // Calculate new dimensions (max 800x800)
-              const maxSize = 800;
-              let { width, height } = img;
-              
-              if (width > height) {
-                if (width > maxSize) {
-                  height = (height * maxSize) / width;
-                  width = maxSize;
-                }
-              } else {
-                if (height > maxSize) {
-                  width = (width * maxSize) / height;
-                  height = maxSize;
-                }
-              }
-              
-              canvas.width = width;
-              canvas.height = height;
-              
-              // Draw and compress
-              ctx?.drawImage(img, 0, 0, width, height);
-              resolve(canvas.toDataURL('image/jpeg', 0.8)); // 80% quality
-            };
-            
-            img.onerror = reject;
-            
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              img.src = e.target?.result as string;
-            };
-            reader.readAsDataURL(file);
-          });
-        };
-        
         try {
-          const compressedImage = await compressImage(file);
-          await processAndSaveMemory(compressedImage);
+          // Upload image to Supabase storage
+          const imageUrl = await memoryService.uploadImage(file);
+          await processAndSaveMemory(imageUrl);
         } catch (fileError) {
-          console.error("Error processing file:", fileError);
-          setLocationError("Failed to process image. Please try again.");
+          console.error("Error uploading image:", fileError);
+          setLocationError("Failed to upload image. Please try again.");
         }
       } else {
         await processAndSaveMemory();

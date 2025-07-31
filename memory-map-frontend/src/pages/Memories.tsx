@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { getUserMemories, updateMemory, deleteMemory } from "../services/api";
+import { useAuth } from "../context/SupabaseAuthContext";
+import { memoryService } from "../services/memoryService";
 import { motion } from "framer-motion";
 import MemoryEditForm from "../components/Memory/MemoryEditForm";
 
@@ -23,7 +23,7 @@ interface GroupedMemories {
 
 const Memories: React.FC = () => {
   const navigate = useNavigate();
-  const { token } = useAuth()!;
+  const { user } = useAuth()!;
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,27 +45,23 @@ const Memories: React.FC = () => {
     visitDate: string;
     imageUrl?: string;
   }) => {
-    if (!editingMemory?.id || !token) return;
+    if (!editingMemory?.id) return;
 
     setEditLoading(true);
     try {
-      const response = await updateMemory(editingMemory.id, updatedData, token);
-      if (response.memory) {
-        // Update the memory in the local state
-        setMemories(prev => prev.map(mem => 
-          mem.id === editingMemory.id 
-            ? {
-                ...mem,
-                title: response.memory.title,
-                description: response.memory.description,
-                visitDate: response.memory.visitDate,
-              }
-            : mem
-        ));
-        setEditingMemory(null);
-      } else {
-        setError(response.error || "Failed to update memory");
-      }
+      const updatedMemory = await memoryService.updateMemory(editingMemory.id, updatedData);
+      // Update the memory in the local state
+      setMemories(prev => prev.map(mem => 
+        mem.id === editingMemory.id 
+          ? {
+              ...mem,
+              title: updatedMemory.title,
+              description: updatedMemory.description,
+              visit_date: updatedMemory.visit_date,
+            }
+          : mem
+      ));
+      setEditingMemory(null);
     } catch (error) {
       console.error("Error updating memory:", error);
       setError("Failed to update memory. Please try again.");
@@ -76,20 +72,16 @@ const Memories: React.FC = () => {
 
   // Handle deleting a memory
   const handleDeleteMemory = async () => {
-    if (!editingMemory?.id || !token) return;
+    if (!editingMemory?.id) return;
 
     if (!confirm("Are you sure you want to delete this memory?")) return;
 
     setEditLoading(true);
     try {
-      const response = await deleteMemory(editingMemory.id, token);
-      if (response.message) {
-        // Remove the memory from local state
-        setMemories(prev => prev.filter(mem => mem.id !== editingMemory.id));
-        setEditingMemory(null);
-      } else {
-        setError(response.error || "Failed to delete memory");
-      }
+      await memoryService.deleteMemory(editingMemory.id);
+      // Remove the memory from local state
+      setMemories(prev => prev.filter(mem => mem.id !== editingMemory.id));
+      setEditingMemory(null);
     } catch (error) {
       console.error("Error deleting memory:", error);
       setError("Failed to delete memory. Please try again.");
@@ -129,13 +121,21 @@ const Memories: React.FC = () => {
 
   useEffect(() => {
     const loadMemories = async () => {
-      if (!token) return;
+      if (!user) return;
       
       try {
-        const response = await getUserMemories(token);
-        if (response.memories) {
-          setMemories(response.memories);
-        }
+        const memories = await memoryService.getUserMemories();
+        setMemories(memories.map(mem => ({
+          id: mem.id,
+          title: mem.title,
+          description: mem.description,
+          mood: mem.mood,
+          latitude: mem.latitude,
+          longitude: mem.longitude,
+          imageUrl: mem.image_url,
+          visitDate: mem.visit_date,
+          createdAt: mem.created_at
+        })));
       } catch (err) {
         setError("Failed to load memories");
         console.error("Error loading memories:", err);
@@ -145,7 +145,7 @@ const Memories: React.FC = () => {
     };
 
     loadMemories();
-  }, [token]);
+  }, [user]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

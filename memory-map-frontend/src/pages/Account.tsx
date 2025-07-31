@@ -1,10 +1,9 @@
 import React, { useState } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/SupabaseAuthContext";
 import { useNavigate } from "react-router-dom";
-import { updateProfile } from "../services/api";
 
 const Account: React.FC = () => {
-  const { user, token, logout, updateUser } = useAuth()!;
+  const { user, signOut, updateProfile } = useAuth()!;
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(user?.name || "");
@@ -19,21 +18,17 @@ const Account: React.FC = () => {
     setSaveSuccess(false);
     
     try {
-      const response = await updateProfile(
-        { 
-          name: editedName, 
-          email: editedEmail 
-        }, 
-        token!
-      );
+      const { error } = await updateProfile({
+        name: editedName, 
+        email: editedEmail 
+      });
       
-      if (response.user) {
-        updateUser(response.user);
+      if (!error) {
         setSaveSuccess(true);
         setIsEditing(false);
         setTimeout(() => setSaveSuccess(false), 3000);
       } else {
-        setSaveError(response.error || "Failed to update profile");
+        setSaveError(error.message || "Failed to update profile");
       }
     } catch (error: any) {
       setSaveError(error.message || "Failed to update profile");
@@ -42,8 +37,12 @@ const Account: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   return (

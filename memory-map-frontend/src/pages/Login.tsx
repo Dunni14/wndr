@@ -1,11 +1,9 @@
 import React, { useState } from "react";
 import PhoneInput from "../components/Auth/PhoneInput";
 import OTPInput from "../components/Auth/OTPInput";
-import { requestOTP as apiRequestOTP, verifyOTP as apiVerifyOTP } from "../services/api";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/SupabaseAuthContext";
 import { useNavigate } from "react-router-dom";
 import SignupForm from "../components/Auth/SignupForm";
-import { signup } from "../services/api";
 
 const Login: React.FC = () => {
   const [step, setStep] = useState<"request" | "verify">("request");
@@ -16,20 +14,20 @@ const Login: React.FC = () => {
   const [otpRequested, setOtpRequested] = useState(false);
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [signupData, setSignupData] = useState<any>(null);
-  const { login } = useAuth()!;
+  const { signInWithPhone, verifyOTP } = useAuth()!;
   const navigate = useNavigate();
 
   const handlePhoneSubmit = async (phoneValue: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiRequestOTP(phoneValue);
-      if (res.message === "OTP sent") {
+      const { error } = await signInWithPhone(phoneValue);
+      if (!error) {
         setPhone(phoneValue);
         setOtpRequested(true);
         setStep("verify");
       } else {
-        setError(res.error || "Failed to send OTP");
+        setError(error.message || "Failed to send OTP");
       }
     } catch (err: any) {
       setError(err.message || "Failed to send OTP");
@@ -46,16 +44,12 @@ const Login: React.FC = () => {
     if (loading) return; // debounce: skip if already loading
     setLoading(true);
     setError(null);
-    // Extra log for debugging double submissions
-    console.log("OTP verify attempt", { phone, code, time: new Date().toISOString() });
     try {
-      const res = await apiVerifyOTP(phone, code, signupData);
-      console.log("verifyOTP response", res);
-      if (res.token) {
-        login(res.user, res.token);
+      const { error } = await verifyOTP(phone, code);
+      if (!error) {
         navigate("/home"); // redirect to WNDR home page
       } else {
-        setError(res.error || "OTP verification failed");
+        setError(error.message || "OTP verification failed");
       }
     } catch (err: any) {
       setError(err.message || "OTP verification failed");
@@ -68,15 +62,20 @@ const Login: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await signup(data);
-      if (res.message === "OTP sent") {
+      // Store signup data for after OTP verification
+      setSignupData({ 
+        name: `${data.firstName} ${data.lastName}`, 
+        email: data.email 
+      });
+      
+      const { error } = await signInWithPhone(data.phone);
+      if (!error) {
         setPhone(data.phone);
-        setSignupData(data); // Store signup data for OTP verification
         setOtpRequested(true);
         setStep("verify");
         setMode("login"); // Switch to login for OTP
       } else {
-        setError(res.error || "Signup failed");
+        setError(error.message || "Signup failed");
       }
     } catch (err: any) {
       setError(err.message || "Signup failed");

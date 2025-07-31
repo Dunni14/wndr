@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { getUserMemories } from "../services/api";
+import { useAuth } from "../context/SupabaseAuthContext";
+import { memoryService } from "../services/memoryService";
 import { motion } from "framer-motion";
 
 interface Memory {
@@ -22,7 +22,7 @@ interface GroupedMemories {
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
-  const { token, logout } = useAuth()!;
+  const { user, signOut } = useAuth()!;
   const [memories, setMemories] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,13 +58,22 @@ const Home: React.FC = () => {
 
   useEffect(() => {
     const loadMemories = async () => {
-      if (!token) return;
+      if (!user) return;
       
       try {
-        const response = await getUserMemories(token);
-        if (response.memories) {
-          setMemories(response.memories);
-        }
+        const memories = await memoryService.getUserMemories();
+        const formattedMemories = memories.map(mem => ({
+          id: mem.id,
+          title: mem.title,
+          description: mem.description,
+          mood: mem.mood,
+          latitude: mem.latitude,
+          longitude: mem.longitude,
+          imageUrl: mem.image_url,
+          visitDate: mem.visit_date,
+          createdAt: mem.created_at
+        }));
+        setMemories(formattedMemories);
       } catch (err) {
         setError("Failed to load memories");
         console.error("Error loading memories:", err);
@@ -74,7 +83,7 @@ const Home: React.FC = () => {
     };
 
     loadMemories();
-  }, [token]);
+  }, [user]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -137,7 +146,7 @@ const Home: React.FC = () => {
                 </svg>
               </button>
               <button 
-                onClick={logout}
+                onClick={signOut}
                 className="w-11 h-11 flex items-center justify-center rounded-full bg-white shadow-neu-btn hover:shadow-neu-in transition-all group"
                 title="Logout"
               >
