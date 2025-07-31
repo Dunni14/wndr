@@ -6,8 +6,8 @@ interface AuthContextType {
   user: User | null
   session: Session | null
   loading: boolean
-  signInWithPhone: (phone: string) => Promise<any>
-  verifyOTP: (phone: string, token: string) => Promise<any>
+  signInWithEmail: (email: string, password: string) => Promise<any>
+  signUpWithEmail: (email: string, password: string, name?: string) => Promise<any>
   signOut: () => Promise<void>
   updateProfile: (data: { name?: string; email?: string }) => Promise<any>
 }
@@ -47,18 +47,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe()
   }, [])
 
-  const signInWithPhone = async (phone: string) => {
-    const { data, error } = await supabase.auth.signInWithOtp({
-      phone,
+  const signInWithEmail = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     })
     return { data, error }
   }
 
-  const verifyOTP = async (phone: string, token: string) => {
-    const { data, error } = await supabase.auth.verifyOtp({
-      phone,
-      token,
-      type: 'sms'
+  const signUpWithEmail = async (email: string, password: string, name?: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name: name
+        }
+      }
     })
     
     if (data.user && !error) {
@@ -67,7 +72,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .from('users')
         .upsert({
           id: data.user.id,
-          phone: phone,
+          email: email,
+          name: name,
         })
         .select()
       
@@ -100,8 +106,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     session,
     loading,
-    signInWithPhone,
-    verifyOTP,
+    signInWithEmail,
+    signUpWithEmail,
     signOut,
     updateProfile,
   }

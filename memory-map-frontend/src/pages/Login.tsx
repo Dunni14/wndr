@@ -1,78 +1,54 @@
 import React, { useState } from "react";
-import PhoneInput from "../components/Auth/PhoneInput";
 import { useAuth } from "../context/SupabaseAuthContext";
 import { useNavigate } from "react-router-dom";
-import SignupForm from "../components/Auth/SignupForm";
 
 const Login: React.FC = () => {
-  const [step, setStep] = useState<"request" | "verify">("request");
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [otpRequested, setOtpRequested] = useState(false);
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [_signupData, setSignupData] = useState<any>(null);
-  const { signInWithPhone, verifyOTP } = useAuth()!;
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const { signInWithEmail, signUpWithEmail } = useAuth()!;
   const navigate = useNavigate();
 
-  const handlePhoneSubmit = async (phoneValue: string) => {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     setLoading(true);
     setError(null);
+    
     try {
-      const { error } = await signInWithPhone(phoneValue);
+      const { error } = await signInWithEmail(email, password);
       if (!error) {
-        setPhone(phoneValue);
-        setOtpRequested(true);
-        setStep("verify");
+        navigate("/home");
       } else {
-        setError(error.message || "Failed to send OTP");
+        setError(error.message || "Login failed");
       }
     } catch (err: any) {
-      setError(err.message || "Failed to send OTP");
+      setError(err.message || "Login failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOTPChange = (val: string) => {
-    setCode(val);
-  };
-
-  const handleOTPSubmit = async () => {
-    if (loading) return; // debounce: skip if already loading
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
     setLoading(true);
     setError(null);
-    try {
-      const { error } = await verifyOTP(phone, code);
-      if (!error) {
-        navigate("/home"); // redirect to WNDR home page
-      } else {
-        setError(error.message || "OTP verification failed");
-      }
-    } catch (err: any) {
-      setError(err.message || "OTP verification failed");
-    } finally {
+    
+    if (password !== confirmPassword) {
+      setError("Passwords don't match");
       setLoading(false);
+      return;
     }
-  };
-
-  const handleSignup = async (data: { phone: string; firstName: string; lastName: string; email: string }) => {
-    setLoading(true);
-    setError(null);
+    
     try {
-      // Store signup data for after OTP verification
-      setSignupData({ 
-        name: `${data.firstName} ${data.lastName}`, 
-        email: data.email 
-      });
-      
-      const { error } = await signInWithPhone(data.phone);
+      const { error } = await signUpWithEmail(email, password, name);
       if (!error) {
-        setPhone(data.phone);
-        setOtpRequested(true);
-        setStep("verify");
-        setMode("login"); // Switch to login for OTP
+        setError(null);
+        // Show success message - user needs to confirm email
+        setError("Check your email for a confirmation link!");
       } else {
         setError(error.message || "Signup failed");
       }
@@ -85,66 +61,143 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-purple">
-      <div className="bg-white p-4 rounded shadow-md w-full max-w-md">
+      <div className="bg-white p-6 rounded shadow-md w-full max-w-md">
         <h1 className="text-2xl font-logo text-center mb-6">WNDR {mode === "login" ? "Login" : "Sign Up"}</h1>
+        
         {mode === "login" ? (
-          step === "request" ? (
-            <>
-              <PhoneInput onSubmit={handlePhoneSubmit} loading={loading} error={error} />
-              <div className="text-center mt-2">
-                <button
-                  type="button"
-                  className="text-blue-600 hover:underline text-sm"
-                  onClick={() => { setMode("signup"); setError(null); }}
-                  disabled={loading}
-                >
-                  Don&apos;t have an account? Sign up
-                </button>
-              </div>
-            </>
-          ) : (
-            <form
-              onSubmit={e => {
-                e.preventDefault();
-                handleOTPSubmit();
-              }}
-              className="space-y-4 max-w-xs mx-auto"
-            >
-              <label className="block text-sm font-medium text-gray-700">Enter OTP</label>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
-                type="text"
-                value={code}
-                onChange={e => handleOTPChange(e.target.value)}
-                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring tracking-widest text-center"
-                placeholder="123456"
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Enter your email"
                 required
-                maxLength={6}
                 disabled={loading}
               />
-              {error && <div className="text-red-500 text-sm">{error}</div>}
-              <button
-                type="submit"
-                className="w-full py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
-                disabled={loading || code.length !== 6 || !otpRequested}
-              >
-                {loading ? "Verifying..." : "Verify OTP"}
-              </button>
-            </form>
-          )
-        ) : (
-          <>
-            <SignupForm onSubmit={handleSignup} loading={loading} error={error} />
-            <div className="text-center mt-2">
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Enter your password"
+                required
+                disabled={loading}
+              />
+            </div>
+            
+            {error && <div className="text-red-500 text-sm">{error}</div>}
+            
+            <button
+              type="submit"
+              className="w-full py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition"
+              disabled={loading}
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </button>
+            
+            <div className="text-center mt-4">
               <button
                 type="button"
-                className="text-blue-600 hover:underline text-sm"
-                onClick={() => { setMode("login"); setError(null); }}
+                className="text-purple-600 hover:underline text-sm"
+                onClick={() => { setMode("signup"); setError(null); setEmail(""); setPassword(""); }}
+                disabled={loading}
+              >
+                Don't have an account? Sign up
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleSignup} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Enter your full name"
+                required
+                disabled={loading}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Enter your email"
+                required
+                disabled={loading}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Create a password"
+                required
+                disabled={loading}
+                minLength={6}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Confirm your password"
+                required
+                disabled={loading}
+                minLength={6}
+              />
+            </div>
+            
+            {error && (
+              <div className={`text-sm p-2 rounded ${
+                error.includes('Check your email') 
+                  ? 'text-green-700 bg-green-100' 
+                  : 'text-red-500'
+              }`}>
+                {error}
+              </div>
+            )}
+            
+            <button
+              type="submit"
+              className="w-full py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition"
+              disabled={loading}
+            >
+              {loading ? "Creating account..." : "Sign Up"}
+            </button>
+            
+            <div className="text-center mt-4">
+              <button
+                type="button"
+                className="text-purple-600 hover:underline text-sm"
+                onClick={() => { setMode("login"); setError(null); setEmail(""); setPassword(""); setName(""); setConfirmPassword(""); }}
                 disabled={loading}
               >
                 Already have an account? Log in
               </button>
             </div>
-          </>
+          </form>
         )}
       </div>
     </div>
