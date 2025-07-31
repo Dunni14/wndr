@@ -70,20 +70,38 @@ export const memoryService = {
 
   // Upload image to Supabase storage
   async uploadImage(file: File): Promise<string> {
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${Date.now()}.${fileExt}`
-    const filePath = `memory-images/${fileName}`
+    try {
+      console.log('Starting image upload:', { fileName: file.name, fileSize: file.size, fileType: file.type })
+      
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${Date.now()}.${fileExt}`
+      const filePath = `memory-images/${fileName}`
 
-    const { error: uploadError } = await supabase.storage
-      .from('memories')
-      .upload(filePath, file)
+      console.log('Uploading to path:', filePath)
 
-    if (uploadError) throw uploadError
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('memories')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
 
-    const { data } = supabase.storage
-      .from('memories')
-      .getPublicUrl(filePath)
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        throw new Error(`Upload failed: ${uploadError.message}`)
+      }
 
-    return data.publicUrl
+      console.log('Upload successful:', uploadData)
+
+      const { data } = supabase.storage
+        .from('memories')
+        .getPublicUrl(filePath)
+
+      console.log('Public URL generated:', data.publicUrl)
+      return data.publicUrl
+    } catch (error) {
+      console.error('Image upload error:', error)
+      throw error
+    }
   }
 }
