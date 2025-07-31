@@ -2,7 +2,7 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "cd memory-map-backend && npm start"
+startCommand = "cd memory-map-backend && node dist/index.js"
 restartPolicyType = "on_failure"
 
 [[services]]
