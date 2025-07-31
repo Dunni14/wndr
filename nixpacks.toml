@@ -2,10 +2,10 @@
 node = "18"
 
 [build]
-cmds = ["npm install", "npm run build"]
+cmds = ["npm install", "npx tsc"]
 
 [start]
-cmd = "npm start"
+cmd = "node dist/index.js"
 
 [variables]
 NODE_ENV = "production"
