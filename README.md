@@ -123,4 +123,4 @@ Personal memory mapping application project.
 
 ---
 
-**Built with ❤️, Racing Sans One font, and powered by Supabase** 🗺️✨
+**Built with pain and powered by Supabase** 🗺️✨
