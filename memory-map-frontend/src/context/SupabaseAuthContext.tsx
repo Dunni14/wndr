@@ -37,15 +37,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
+        console.log('Auth state change:', event, session?.user?.id)
         setSession(session)
         setUser(session?.user ?? null)
+        
+        // Create user profile when user signs in (including after email confirmation)
+        if (event === 'SIGNED_IN' && session?.user) {
+          await createUserProfile(session.user)
+        }
+        
         setLoading(false)
       }
     )
 
     return () => subscription.unsubscribe()
   }, [])
+
+  // Helper function to create user profile
+  const createUserProfile = async (user: any) => {
+    try {
+      const { error: profileError } = await supabase
+        .from('users')
+        .upsert({
+          id: user.id,
+          email: user.email,
+          name: user.user_metadata?.name || null,
+        }, {
+          onConflict: 'id'
+        })
+        .select()
+      
+      if (profileError) {
+        console.error('Error creating user profile:', profileError)
+      } else {
+        console.log('User profile created/updated successfully')
+      }
+    } catch (error) {
+      console.error('Error in createUserProfile:', error)
+    }
+  }
 
   const signInWithEmail = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -65,22 +96,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     })
-    
-    if (data.user && !error) {
-      // Create user profile if it doesn't exist
-      const { error: profileError } = await supabase
-        .from('users')
-        .upsert({
-          id: data.user.id,
-          email: email,
-          name: name,
-        })
-        .select()
-      
-      if (profileError) {
-        console.error('Error creating user profile:', profileError)
-      }
-    }
     
     return { data, error }
   }
