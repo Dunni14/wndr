@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/SupabaseAuthContext";
 import { useNavigate } from "react-router-dom";
+import mapBackground from "../assets/OP-map.webp";
 
 const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -68,8 +69,17 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-purple">
-      <div className="bg-white p-6 rounded shadow-md w-full max-w-md">
+    <div 
+      className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat relative"
+      style={{
+        backgroundImage: `url(${mapBackground})`
+      }}
+    >
+      {/* Dark overlay for better contrast */}
+      <div className="absolute inset-0 bg-black bg-opacity-60"></div>
+      
+      {/* Login form container with enhanced styling */}
+      <div className="bg-white p-8 rounded-lg shadow-2xl w-full max-w-md relative z-10 backdrop-blur-sm bg-opacity-95">
         <h1 className="text-2xl font-logo text-center mb-2">WNDR {mode === "login" ? "Login" : "Sign Up"}</h1>
         <h3 className="text-sm text-gray-600 text-center mb-6">Welcome to WNDR (wander), Your personal visual diary. Your memories mapped across the world.</h3>
         
