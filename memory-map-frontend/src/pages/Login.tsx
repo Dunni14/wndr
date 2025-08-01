@@ -13,12 +13,24 @@ const Login: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
   const { signInWithEmail, signUpWithEmail } = useAuth()!;
   const navigate = useNavigate();
   
   // Check if passwords match
   const passwordsMatch = password === confirmPassword;
   const showPasswordMismatch = confirmPassword.length > 0 && !passwordsMatch;
+
+  // Check for email confirmation on component mount
+  React.useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('type') === 'signup' && urlParams.get('token_hash')) {
+      setEmailConfirmed(true);
+      setError("Email confirmed successfully! You can now log in.");
+      // Clean up the URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,7 +142,15 @@ const Login: React.FC = () => {
               </div>
             </div>
             
-            {error && <div className="text-red-500 text-sm">{error}</div>}
+            {error && (
+              <div className={`text-sm p-2 rounded ${
+                error.includes('Email confirmed successfully') || error.includes('Check your email')
+                  ? 'text-green-700 bg-green-100' 
+                  : 'text-red-500'
+              }`}>
+                {error}
+              </div>
+            )}
             
             <button
               type="submit"
