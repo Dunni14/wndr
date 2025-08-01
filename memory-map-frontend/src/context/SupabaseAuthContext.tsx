@@ -119,6 +119,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const signUpWithEmail = async (email: string, password: string, name?: string) => {
+    // Always use the current origin, which will be the Vercel URL in production
+    const redirectUrl = `${window.location.origin}/login`;
+    
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -126,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         data: {
           name: name
         },
-        emailRedirectTo: `${window.location.origin}/login`
+        emailRedirectTo: redirectUrl
       }
     })
     
