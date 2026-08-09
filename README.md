@@ -1,5 +1,5 @@
 # WNDR 🗺️
-
+Don't waste time reading the README test it out: https://wndr-cyan.vercel.app/login
 **WNDR** is a memory mapping application that allows users to capture, organize, and explore their life experiences through an interactive map interface. Create visual memories tied to specific locations and watch your personal journey unfold geographically.
 
 ## 🎯 What is WNDR?
